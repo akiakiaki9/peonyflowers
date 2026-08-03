@@ -1,20 +1,25 @@
 {
   "name": "gullar-avtovokzal",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently \"next dev\" \"node bot.cjs\"",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "init-db": "node scripts/init-db.js"
   },
   "dependencies": {
-    "next": "16.2.12",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "next": "14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sqlite3": "^5.1.7",
+    "sqlite": "^5.1.1",
+    "node-telegram-bot-api": "^0.64.0",
+    "react-icons": "^4.12.0",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "eslint": "^9",
-    "eslint-config-next": "16.2.12"
+    "concurrently": "^8.2.2"
   }
 }
