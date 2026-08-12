@@ -36,7 +36,6 @@ if (!adminId) {
 const bot = new TelegramBot(token, { polling: true })
 let db = null
 
-// Подключение к базе данных
 async function initDB() {
   try {
     const dbPath = path.join(__dirname, 'database', 'peony.db')
@@ -45,6 +44,23 @@ async function initDB() {
       driver: sqlite3.Database
     })
     console.log('✅ База данных подключена')
+    
+    // Проверяем наличие колонки comment
+    const tableInfo = await db.all("PRAGMA table_info(orders)")
+    const hasComment = tableInfo.some(col => col.name === 'comment')
+    
+    if (!hasComment) {
+      console.log('🔄 Добавляем колонку comment в таблицу orders...')
+      try {
+        await db.exec('ALTER TABLE orders ADD COLUMN comment TEXT')
+        console.log('✅ Колонка comment добавлена')
+      } catch (error) {
+        if (!error.message.includes('duplicate column name')) {
+          console.error('❌ Ошибка при добавлении колонки:', error)
+        }
+      }
+    }
+    
     return db
   } catch (error) {
     console.error('❌ Ошибка подключения к БД:', error)
@@ -52,12 +68,10 @@ async function initDB() {
   }
 }
 
-// Генерация кода
 function generateCode() {
   return Math.floor(1000000 + Math.random() * 9000000).toString()
 }
 
-// Форматирование даты
 function formatDate(date) {
   return new Date(date).toLocaleDateString('ru-RU', {
     day: '2-digit',
@@ -68,22 +82,18 @@ function formatDate(date) {
   })
 }
 
-// Очистка телефона от лишних символов
 function cleanPhone(phone) {
   return phone.replace(/[^0-9+]/g, '')
 }
 
-// Состояния для диалогов
 const userStates = {}
 
-// Проверка админа
 function isAdmin(chatId) {
   return chatId.toString() === adminId.toString()
 }
 
-// ============ КОМАНДЫ ДЛЯ АДМИНА ============
+// ============ МЕНЮ АДМИНА ============
 
-// Главное меню админа
 bot.onText(/\/admin/, async (msg) => {
   const chatId = msg.chat.id
   
@@ -105,82 +115,58 @@ bot.onText(/\/admin/, async (msg) => {
   }
 
   await bot.sendMessage(chatId, 
-    '🤖 Админ-панель Peony Flowers\n\n' +
-    'Выберите действие:',
+    '🤖 Админ-панель Peony Flowers\n\nВыберите действие:',
     keyboard
   )
 })
 
-// 1. Добавить клиента
+// ============ КОМАНДЫ ============
+
 bot.onText(/👤 Добавить клиента/, async (msg) => {
   const chatId = msg.chat.id
-  
   if (!isAdmin(chatId)) return
 
   userStates[chatId] = { action: 'addclient' }
   await bot.sendMessage(chatId, 
     '👤 Добавление нового клиента\n\n' +
-    'Введите данные в формате:\n' +
-    'Имя, Телефон\n\n' +
+    'Введите: Имя, Телефон\n' +
     'Пример: Акбар, +998940837700\n\n' +
-    'Telegram ID клиента привяжется автоматически,\n' +
-    'когда клиент впервые войдет в бота по коду.\n\n' +
-    'Или отправьте /cancel для отмены'
+    'Или /cancel для отмены'
   )
 })
 
-// 2. Добавить покупку
 bot.onText(/🛍 Добавить покупку/, async (msg) => {
   const chatId = msg.chat.id
-  
   if (!isAdmin(chatId)) return
 
   userStates[chatId] = { action: 'addpurchase_step1' }
   await bot.sendMessage(chatId, 
-    '🛍 Добавление покупки\n\n' +
-    'Введите код клиента:\n\n' +
-    'Или отправьте /cancel для отмены'
+    '🛍 Введите код клиента:\n\nИли /cancel для отмены'
   )
 })
 
-// 3. История клиента
 bot.onText(/📋 История клиента/, async (msg) => {
   const chatId = msg.chat.id
-  
   if (!isAdmin(chatId)) return
 
   userStates[chatId] = { action: 'history' }
   await bot.sendMessage(chatId, 
-    '📋 Введите код клиента для просмотра истории покупок:\n\n' +
-    'Или отправьте /cancel для отмены'
+    '📋 Введите код клиента:\n\nИли /cancel для отмены'
   )
 })
 
-// 4. Поиск клиента
 bot.onText(/🔍 Поиск клиента/, async (msg) => {
   const chatId = msg.chat.id
-  
   if (!isAdmin(chatId)) return
 
   userStates[chatId] = { action: 'search' }
   await bot.sendMessage(chatId, 
-    '🔍 Введите поисковый запрос:\n\n' +
-    'Я ищу по:\n' +
-    '• Имени (полное или частичное)\n' +
-    '• Телефону (в любом формате)\n' +
-    '• Коду клиента (7 цифр)\n\n' +
-    'Примеры:\n' +
-    '• Акбар\n' +
-    '• 94 083\n' +
-    '• 4172722\n\n' +
-    'Или отправьте /cancel для отмены'
+    '🔍 Введите имя, телефон или код для поиска:\n\nИли /cancel для отмены'
   )
 })
 
-// 5. Список клиентов
 bot.onText(/📋 Список клиентов/, async (msg) => {
   const chatId = msg.chat.id
-  
   if (!isAdmin(chatId)) return
 
   try {
@@ -190,10 +176,7 @@ bot.onText(/📋 Список клиентов/, async (msg) => {
       SELECT c.*, 
         (SELECT COUNT(*) FROM orders WHERE client_id = c.id) as purchases_count
       FROM clients c 
-      ORDER BY 
-        CASE WHEN c.telegram_id IS NOT NULL THEN 1 ELSE 2 END,
-        purchases_count DESC,
-        c.created_at DESC
+      ORDER BY purchases_count DESC, c.created_at DESC
     `)
     
     if (clients.length === 0) {
@@ -210,66 +193,48 @@ bot.onText(/📋 Список клиентов/, async (msg) => {
       message += `   🛍 Покупок: ${client.purchases_count || 0}\n\n`
     }
     
-    if (message.length > 4000) {
-      const parts = message.match(/.{1,4000}/g)
-      for (const part of parts) {
-        await bot.sendMessage(chatId, part)
-      }
-    } else {
-      await bot.sendMessage(chatId, message)
-    }
+    await bot.sendMessage(chatId, message)
     
   } catch (error) {
     console.error(error)
-    await bot.sendMessage(chatId, '❌ Ошибка при получении списка')
+    await bot.sendMessage(chatId, '❌ Ошибка')
   }
 })
 
-// 6. Удалить клиента
 bot.onText(/🗑 Удалить клиента/, async (msg) => {
   const chatId = msg.chat.id
-  
   if (!isAdmin(chatId)) return
 
   userStates[chatId] = { action: 'delete_step1' }
   await bot.sendMessage(chatId, 
-    '🗑 Введите код клиента для удаления:\n\n' +
-    'Или отправьте /cancel для отмены'
+    '🗑 Введите код клиента для удаления:\n\nИли /cancel для отмены'
   )
 })
 
-// 7. Помощь
 bot.onText(/❓ Помощь/, async (msg) => {
   const chatId = msg.chat.id
   
   if (!isAdmin(chatId)) {
-    await bot.sendMessage(chatId, 
-      '🌸 Peony Flowers Bot\n\n' +
-      'Для просмотра истории покупок:\n' +
-      '/start - войти по коду'
-    )
+    await bot.sendMessage(chatId, '🌸 Для истории покупок: /start')
     return
   }
   
   await bot.sendMessage(chatId,
-    '🤖 Админ-панель Peony Flowers\n\n' +
-    '👤 Добавить клиента - добавить нового клиента\n' +
-    '🛍 Добавить покупку - добавить покупку клиенту\n' +
-    '📋 История клиента - посмотреть историю покупок клиента\n' +
-    '🔍 Поиск клиента - найти клиента по имени/телефону/коду\n' +
-    '📋 Список клиентов - показать всех клиентов\n' +
-    '🗑 Удалить клиента - удалить клиента по коду\n' +
-    '❓ Помощь - эта справка\n\n' +
-    '📱 Команды для клиентов:\n' +
-    '/start - войти по коду или ID'
+    '🤖 Админ-панель:\n\n' +
+    '👤 Добавить клиента\n' +
+    '🛍 Добавить покупку\n' +
+    '📋 История клиента\n' +
+    '🔍 Поиск клиента\n' +
+    '📋 Список клиентов\n' +
+    '🗑 Удалить клиента\n' +
+    '❓ Помощь'
   )
 })
 
-// 8. Отмена
 bot.onText(/\/cancel/, async (msg) => {
   const chatId = msg.chat.id
   delete userStates[chatId]
-  await bot.sendMessage(chatId, '✅ Действие отменено', {
+  await bot.sendMessage(chatId, '✅ Отменено', {
     reply_markup: { 
       keyboard: [
         ['👤 Добавить клиента', '🛍 Добавить покупку'],
@@ -282,7 +247,7 @@ bot.onText(/\/cancel/, async (msg) => {
   })
 })
 
-// ============ ОБРАБОТКА СООБЩЕНИЙ (диалоги) ============
+// ============ ОБРАБОТКА ДИАЛОГОВ ============
 
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id
@@ -291,13 +256,237 @@ bot.on('message', async (msg) => {
   const state = userStates[chatId]
   if (!state) return
   
-  if (isAdmin(chatId)) {
-    
-    // ===== ДОБАВЛЕНИЕ КЛИЕНТА =====
-    if (state.action === 'addclient') {
-      if (text === '/cancel') {
+  if (!isAdmin(chatId)) {
+    // Обработка клиентского входа
+    if (state.action === 'client_login') {
+      try {
+        if (!db) await initDB()
+        
+        const code = text.trim()
+        if (code.length !== 7) {
+          await bot.sendMessage(chatId, '❌ Код должен быть 7 цифр')
+          return
+        }
+        
+        const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
+        if (!client) {
+          await bot.sendMessage(chatId, '❌ Код не найден')
+          return
+        }
+        
+        await db.run(
+          'UPDATE clients SET telegram_id = ? WHERE id = ?',
+          chatId.toString(), client.id
+        )
+        
         delete userStates[chatId]
-        await bot.sendMessage(chatId, '✅ Отменено', {
+        await showHistory(chatId, client)
+        
+      } catch (error) {
+        console.error(error)
+        await bot.sendMessage(chatId, '❌ Ошибка')
+      }
+    }
+    return
+  }
+  
+  // ===== ДОБАВЛЕНИЕ КЛИЕНТА =====
+  if (state.action === 'addclient') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    try {
+      const parts = text.split(',').map(p => p.trim())
+      if (parts.length < 2) {
+        await bot.sendMessage(chatId, '❌ Формат: Имя, Телефон')
+        return
+      }
+      
+      const name = parts[0]
+      const phone = cleanPhone(parts[1])
+      
+      if (!db) await initDB()
+      
+      const existing = await db.get(
+        'SELECT * FROM clients WHERE phone LIKE ?',
+        `%${phone.replace(/[^0-9]/g, '')}%`
+      )
+      
+      if (existing) {
+        await bot.sendMessage(chatId, `⚠️ Клиент уже есть:\n${existing.name}\n${existing.phone}\nКод: ${existing.code}`)
+        return
+      }
+      
+      const code = generateCode()
+      await db.run(
+        'INSERT INTO clients (name, phone, code) VALUES (?, ?, ?)',
+        name, phone, code
+      )
+      
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, 
+        `✅ Клиент добавлен!\n👤 ${name}\n📱 ${phone}\n🔑 ${code}`
+      )
+      
+    } catch (error) {
+      console.error(error)
+      await bot.sendMessage(chatId, '❌ Ошибка')
+    }
+    return
+  }
+  
+  // ===== ИСТОРИЯ КЛИЕНТА =====
+  if (state.action === 'history') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    const code = text.trim()
+    if (!db) await initDB()
+    
+    const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
+    if (!client) {
+      await bot.sendMessage(chatId, '❌ Клиент не найден')
+      return
+    }
+    
+    delete userStates[chatId]
+    
+    const purchases = await db.all(`
+      SELECT o.*,
+        (SELECT json_group_array(
+          json_object(
+            'name', oi.product_name,
+            'price', oi.price,
+            'quantity', oi.quantity
+          )
+        ) FROM order_items oi WHERE oi.order_id = o.id) as items_json
+      FROM orders o
+      WHERE o.client_id = ?
+      ORDER BY o.date DESC
+    `, client.id)
+    
+    let history = `📋 История ${client.name}\n\n`
+    history += `📱 ${client.phone}\n🔑 ${client.code}\n`
+    history += `🛍 Покупок: ${purchases.length}\n\n`
+    
+    if (purchases.length === 0) {
+      history += 'Нет покупок 🌸'
+    } else {
+      purchases.forEach((p, i) => {
+        history += `📦 #${i + 1}\n`
+        const items = p.items_json ? JSON.parse(p.items_json) : []
+        items.forEach(item => {
+          history += `  • ${item.name} - ${item.price} сум x${item.quantity || 1}\n`
+        })
+        if (p.comment) history += `  📝 ${p.comment}\n`
+        history += `💰 ${p.total} сум\n📅 ${formatDate(p.date)}\n\n`
+      })
+    }
+    
+    await bot.sendMessage(chatId, history)
+    return
+  }
+  
+  // ===== ПОИСК =====
+  if (state.action === 'search') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    try {
+      const query = text.trim()
+      if (!db) await initDB()
+      
+      const phoneQuery = query.replace(/[^0-9]/g, '')
+      
+      const clients = await db.all(`
+        SELECT * FROM clients 
+        WHERE 
+          LOWER(name) LIKE LOWER(?)
+          OR REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?
+          OR code LIKE ?
+        ORDER BY created_at DESC
+      `, 
+        `%${query}%`,
+        `%${phoneQuery}%`,
+        `%${query}%`
+      )
+      
+      delete userStates[chatId]
+      
+      if (clients.length === 0) {
+        await bot.sendMessage(chatId, '❌ Не найдено')
+        return
+      }
+      
+      let message = `🔍 Найдено ${clients.length}:\n\n`
+      for (const client of clients) {
+        const count = await db.get(
+          'SELECT COUNT(*) as c FROM orders WHERE client_id = ?',
+          client.id
+        )
+        message += `${client.telegram_id ? '✅' : '❌'} ${client.name}\n`
+        message += `   📱 ${client.phone}\n🔑 ${client.code}\n`
+        message += `   🛍 ${count ? count.c : 0}\n\n`
+      }
+      
+      await bot.sendMessage(chatId, message)
+      
+    } catch (error) {
+      console.error(error)
+      await bot.sendMessage(chatId, '❌ Ошибка')
+    }
+    return
+  }
+  
+  // ===== УДАЛЕНИЕ =====
+  if (state.action === 'delete_step1') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    const code = text.trim()
+    if (!db) await initDB()
+    
+    const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
+    if (!client) {
+      await bot.sendMessage(chatId, '❌ Не найден')
+      return
+    }
+    
+    state.action = 'confirm_delete'
+    state.clientCode = code
+    state.clientName = client.name
+    
+    await bot.sendMessage(chatId, 
+      `⚠️ Удалить ${client.name}?\n\nОтправьте ДА или НЕТ`,
+      {
+        reply_markup: {
+          keyboard: [['✅ ДА', '❌ НЕТ']],
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      }
+    )
+    return
+  }
+  
+  if (state.action === 'confirm_delete') {
+    if (text === '✅ ДА' || text.toLowerCase() === 'да') {
+      try {
+        await db.run('DELETE FROM clients WHERE code = ?', state.clientCode)
+        delete userStates[chatId]
+        await bot.sendMessage(chatId, `✅ Удален`, {
           reply_markup: { 
             keyboard: [
               ['👤 Добавить клиента', '🛍 Добавить покупку'],
@@ -308,387 +497,217 @@ bot.on('message', async (msg) => {
             resize_keyboard: true 
           }
         })
-        return
-      }
-      
-      try {
-        const parts = text.split(',').map(p => p.trim())
-        if (parts.length < 2) {
-          await bot.sendMessage(chatId, 
-            '❌ Неверный формат. Используйте: Имя, Телефон\n' +
-            'Пример: Акбар, +998940837700'
-          )
-          return
-        }
-        
-        const name = parts[0]
-        const phone = cleanPhone(parts[1])
-        
-        if (!db) await initDB()
-        
-        const phoneDigits = phone.replace(/[^0-9]/g, '')
-        const existing = await db.get(
-          'SELECT * FROM clients WHERE REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "+", "") LIKE ?',
-          `%${phoneDigits}%`
-        )
-        
-        if (existing) {
-          await bot.sendMessage(chatId, 
-            `⚠️ Клиент с таким телефоном уже существует:\n\n` +
-            `👤 ${existing.name}\n` +
-            `📱 ${existing.phone}\n` +
-            `🔑 Код: ${existing.code}\n\n` +
-            `Хотите добавить нового? Отправьте /cancel для отмены`
-          )
-          return
-        }
-        
-        const code = generateCode()
-        await db.run(
-          'INSERT INTO clients (name, phone, code) VALUES (?, ?, ?)',
-          name, phone, code
-        )
-        
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, 
-          `✅ Клиент добавлен!\n\n` +
-          `👤 Имя: ${name}\n` +
-          `📱 Телефон: ${phone}\n` +
-          `🔑 Код: ${code}\n\n` +
-          `📌 Отправьте этот код клиенту.`,
-          {
-            reply_markup: { 
-              keyboard: [
-                ['👤 Добавить клиента', '🛍 Добавить покупку'],
-                ['📋 История клиента', '🔍 Поиск клиента'],
-                ['📋 Список клиентов', '🗑 Удалить клиента'],
-                ['❓ Помощь']
-              ],
-              resize_keyboard: true 
-            }
-          }
-        )
       } catch (error) {
         console.error(error)
-        await bot.sendMessage(chatId, '❌ Ошибка при добавлении клиента')
+        await bot.sendMessage(chatId, '❌ Ошибка')
       }
-      return
-    }
-    
-    // ===== ИСТОРИЯ КЛИЕНТА =====
-    if (state.action === 'history') {
-      if (text === '/cancel') {
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, '✅ Отменено')
-        return
-      }
-      
-      const code = text.trim()
-      if (!db) await initDB()
-      
-      const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
-      if (!client) {
-        await bot.sendMessage(chatId, '❌ Клиент не найден. Попробуйте снова или /cancel')
-        return
-      }
-      
+    } else {
       delete userStates[chatId]
-      
-      const purchases = await db.all(`
-        SELECT o.*,
-          (SELECT json_group_array(
-            json_object(
-              'name', oi.product_name,
-              'price', oi.price,
-              'quantity', oi.quantity
-            )
-          ) FROM order_items oi WHERE oi.order_id = o.id) as items_json
-        FROM orders o
-        WHERE o.client_id = ?
-        ORDER BY o.date DESC
-      `, client.id)
-      
-      let history = `📋 История покупок ${client.name}\n\n`
-      history += `📱 Телефон: ${client.phone}\n`
-      history += `🔑 Код: ${client.code}\n`
-      history += `📨 TG: ${client.telegram_id || 'не привязан'}\n`
-      history += `🛍 Всего покупок: ${purchases.length}\n\n`
-      
-      if (purchases.length === 0) {
-        history += 'У клиента пока нет покупок 🌸'
-      } else {
-        purchases.forEach((purchase, index) => {
-          history += `📦 Покупка #${index + 1}\n`
-          const items = purchase.items_json ? JSON.parse(purchase.items_json) : []
-          items.forEach(item => {
-            history += `  • ${item.name} - ${item.price} сум x${item.quantity || 1}\n`
-          })
-          if (purchase.comment) {
-            history += `  📝 Комментарий: ${purchase.comment}\n`
-          }
-          history += `💰 Итого: ${purchase.total} сум\n`
-          history += `📅 ${formatDate(purchase.date)}\n\n`
-        })
-      }
-      
-      await bot.sendMessage(chatId, history)
+      await bot.sendMessage(chatId, '❌ Отменено', {
+        reply_markup: { 
+          keyboard: [
+            ['👤 Добавить клиента', '🛍 Добавить покупку'],
+            ['📋 История клиента', '🔍 Поиск клиента'],
+            ['📋 Список клиентов', '🗑 Удалить клиента'],
+            ['❓ Помощь']
+          ],
+          resize_keyboard: true 
+        }
+      })
+    }
+    return
+  }
+  
+  // ===== ДОБАВЛЕНИЕ ПОКУПКИ =====
+  
+  // Шаг 1: Ввод кода клиента
+  if (state.action === 'addpurchase_step1') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
       return
     }
     
-    // ===== ПОИСК =====
-    if (state.action === 'search') {
-      if (text === '/cancel') {
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, '✅ Отменено')
-        return
+    const code = text.trim()
+    if (!db) await initDB()
+    
+    const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
+    if (!client) {
+      await bot.sendMessage(chatId, '❌ Клиент не найден. Попробуйте снова или /cancel')
+      return
+    }
+    
+    state.action = 'addpurchase_name'
+    state.clientId = client.id
+    state.clientName = client.name
+    state.clientCode = client.code
+    
+    await bot.sendMessage(chatId,
+      `👤 Клиент: ${client.name} (${client.code})\n\n` +
+      `📝 Введите НАЗВАНИЕ товара:\n\n` +
+      `Или /cancel для отмены`
+    )
+    return
+  }
+  
+  // Шаг 2: Ввод названия
+  if (state.action === 'addpurchase_name') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    state.productName = text.trim()
+    state.action = 'addpurchase_price'
+    
+    await bot.sendMessage(chatId,
+      `🛍 Товар: ${state.productName}\n\n` +
+      `💰 Введите ЦЕНУ (в сумах):\n\n` +
+      `Пример: 400000\n\n` +
+      `Или /cancel для отмены`
+    )
+    return
+  }
+  
+  // Шаг 3: Ввод цены
+  if (state.action === 'addpurchase_price') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    const priceStr = text.replace(/[^0-9]/g, '')
+    const price = parseInt(priceStr)
+    
+    if (isNaN(price) || price <= 0) {
+      await bot.sendMessage(chatId, '❌ Неверная цена. Введите число:\n\nПример: 400000')
+      return
+    }
+    
+    state.price = price
+    state.action = 'addpurchase_quantity'
+    
+    await bot.sendMessage(chatId,
+      `🛍 Товар: ${state.productName}\n` +
+      `💰 Цена: ${price.toLocaleString()} сум\n\n` +
+      `📦 Введите КОЛИЧЕСТВО:\n\n` +
+      `Пример: 2\n\n` +
+      `Или /cancel для отмены`
+    )
+    return
+  }
+  
+  // Шаг 4: Ввод количества
+  if (state.action === 'addpurchase_quantity') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    const qty = parseInt(text.replace(/[^0-9]/g, ''))
+    
+    if (isNaN(qty) || qty <= 0) {
+      await bot.sendMessage(chatId, '❌ Неверное количество. Введите число:\n\nПример: 2')
+      return
+    }
+    
+    state.quantity = qty
+    state.action = 'addpurchase_comment'
+    
+    await bot.sendMessage(chatId,
+      `🛍 Товар: ${state.productName}\n` +
+      `💰 Цена: ${state.price.toLocaleString()} сум\n` +
+      `📦 Количество: ${state.quantity}\n` +
+      `📝 Введите КОММЕНТАРИЙ (скидка, особые пожелания и т.д.)\n` +
+      `Или отправьте "нет" если комментария нет:\n\n` +
+      `Или /cancel для отмены`
+    )
+    return
+  }
+  
+  // Шаг 5: Ввод комментария
+  if (state.action === 'addpurchase_comment') {
+    if (text === '/cancel') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '✅ Отменено')
+      return
+    }
+    
+    state.comment = text.trim() === 'нет' ? null : text.trim()
+    
+    let message = `📋 ПРОВЕРЬТЕ ДАННЫЕ:\n\n`
+    message += `👤 Клиент: ${state.clientName} (${state.clientCode})\n`
+    message += `🛍 Товар: ${state.productName}\n`
+    message += `💰 Цена: ${state.price.toLocaleString()} сум\n`
+    message += `📦 Количество: ${state.quantity}\n`
+    if (state.comment) {
+      message += `📝 Комментарий: ${state.comment}\n`
+    }
+    message += `\n✅ Сохранить покупку?`
+    
+    state.action = 'addpurchase_confirm'
+    
+    await bot.sendMessage(chatId, message, {
+      reply_markup: {
+        keyboard: [
+          ['✅ ДА, СОХРАНИТЬ', '❌ ОТМЕНА']
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true
       }
-      
+    })
+    return
+  }
+  
+  // Шаг 6: Подтверждение
+  if (state.action === 'addpurchase_confirm') {
+    if (text === '✅ ДА, СОХРАНИТЬ') {
       try {
-        const query = text.trim()
-        if (!db) await initDB()
-        
-        const phoneQuery = query.replace(/[^0-9]/g, '')
-        
-        const clients = await db.all(`
-          SELECT * FROM clients 
-          WHERE 
-            LOWER(name) LIKE LOWER(?)
-            OR REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
-            OR code LIKE ?
-          ORDER BY created_at DESC
-        `, 
-          `%${query}%`,
-          `%${phoneQuery}%`,
-          `%${query}%`
-        )
-        
-        delete userStates[chatId]
-        
-        if (clients.length === 0) {
-          await bot.sendMessage(chatId, '❌ Клиенты не найдены')
-          return
-        }
-        
-        let message = `🔍 Найдено ${clients.length} клиентов:\n\n`
-        for (const client of clients) {
-          const purchasesCount = await db.get(
-            'SELECT COUNT(*) as count FROM orders WHERE client_id = ?',
-            client.id
-          )
-          
-          const lastPurchase = await db.get(`
-            SELECT date FROM orders 
-            WHERE client_id = ? 
-            ORDER BY date DESC LIMIT 1
-          `, client.id)
-          
-          const hasTG = client.telegram_id ? '✅' : '❌'
-          message += `${hasTG} ${client.name}\n`
-          message += `   📱 ${client.phone}\n`
-          message += `   🔑 Код: ${client.code}\n`
-          if (client.telegram_id) {
-            message += `   📨 TG ID: ${client.telegram_id}\n`
-          } else {
-            message += `   📨 TG: не привязан\n`
-          }
-          message += `   🛍 Покупок: ${purchasesCount ? purchasesCount.count : 0}\n`
-          if (lastPurchase) {
-            message += `   📅 Последняя покупка: ${formatDate(lastPurchase.date)}\n`
-          }
-          message += `\n`
-        }
-        
-        await bot.sendMessage(chatId, message)
-        
-      } catch (error) {
-        console.error(error)
-        await bot.sendMessage(chatId, '❌ Ошибка при поиске')
-      }
-      return
-    }
-    
-    // ===== УДАЛЕНИЕ КЛИЕНТА =====
-    if (state.action === 'delete_step1') {
-      if (text === '/cancel') {
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, '✅ Отменено')
-        return
-      }
-      
-      const code = text.trim()
-      if (!db) await initDB()
-      
-      const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
-      if (!client) {
-        await bot.sendMessage(chatId, '❌ Клиент не найден. Попробуйте снова или /cancel')
-        return
-      }
-      
-      state.action = 'confirm_delete'
-      state.clientCode = code
-      state.clientName = client.name
-      
-      await bot.sendMessage(chatId, 
-        `⚠️ Вы действительно хотите удалить клиента?\n\n` +
-        `👤 ${client.name}\n` +
-        `📱 ${client.phone}\n` +
-        `🔑 ${client.code}\n\n` +
-        `Отправьте ДА или НЕТ`,
-        {
-          reply_markup: {
-            keyboard: [
-              ['✅ ДА', '❌ НЕТ']
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: true
-          }
-        }
-      )
-      return
-    }
-    
-    if (state.action === 'confirm_delete') {
-      if (text === '✅ ДА' || text.toLowerCase() === 'да') {
-        try {
-          await db.run('DELETE FROM clients WHERE code = ?', state.clientCode)
-          delete userStates[chatId]
-          await bot.sendMessage(chatId, 
-            `✅ Клиент ${state.clientName} удален`,
-            { 
-              reply_markup: { 
-                keyboard: [
-                  ['👤 Добавить клиента', '🛍 Добавить покупку'],
-                  ['📋 История клиента', '🔍 Поиск клиента'],
-                  ['📋 Список клиентов', '🗑 Удалить клиента'],
-                  ['❓ Помощь']
-                ],
-                resize_keyboard: true 
-              }
-            }
-          )
-        } catch (error) {
-          console.error(error)
-          await bot.sendMessage(chatId, '❌ Ошибка при удалении')
-        }
-      } else if (text === '❌ НЕТ' || text.toLowerCase() === 'нет') {
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, 
-          '❌ Удаление отменено',
-          { 
-            reply_markup: { 
-              keyboard: [
-                ['👤 Добавить клиента', '🛍 Добавить покупку'],
-                ['📋 История клиента', '🔍 Поиск клиента'],
-                ['📋 Список клиентов', '🗑 Удалить клиента'],
-                ['❓ Помощь']
-              ],
-              resize_keyboard: true 
-            }
-          }
-        )
-      }
-      return
-    }
-    
-    // ===== ДОБАВЛЕНИЕ ПОКУПКИ =====
-    if (state.action === 'addpurchase_step1') {
-      if (text === '/cancel') {
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, '✅ Отменено')
-        return
-      }
-      
-      const code = text.trim()
-      if (!db) await initDB()
-      
-      const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
-      if (!client) {
-        await bot.sendMessage(chatId, '❌ Клиент не найден. Попробуйте снова или /cancel')
-        return
-      }
-      
-      state.action = 'addpurchase_step2'
-      state.clientId = client.id
-      state.clientName = client.name
-      
-      await bot.sendMessage(chatId,
-        `👤 Клиент: ${client.name}\n\n` +
-        `🛍 Введите покупку в формате:\n` +
-        `Название, Цена, Количество, Комментарий (опционально)\n\n` +
-        `⚠️ Цена указывается с учетом скидки!\n\n` +
-        `Примеры:\n` +
-        `• Букет роз, 355000, 2, Скидка 25%\n` +
-        `• Букет пионов, 250000, 1\n` +
-        `• Букет тюльпанов, 180000, 3, Подарочная упаковка\n\n` +
-        `Или отправьте /cancel для отмены`
-      )
-      return
-    }
-    
-    if (state.action === 'addpurchase_step2') {
-      if (text === '/cancel') {
-        delete userStates[chatId]
-        await bot.sendMessage(chatId, '✅ Отменено')
-        return
-      }
-      
-      try {
-        const parts = text.split(',').map(p => p.trim())
-        if (parts.length < 2) {
-          await bot.sendMessage(chatId, 
-            '❌ Неверный формат.\n\n' +
-            'Используйте: Название, Цена, Количество, Комментарий\n' +
-            'Пример: Букет роз, 355000, 2, Скидка 25%'
-          )
-          return
-        }
-        
-        const name = parts[0]
-        const priceStr = parts[1].replace(/\s/g, '')
-        const price = parseInt(priceStr)
-        
-        if (isNaN(price) || price <= 0) {
-          await bot.sendMessage(chatId, 
-            '❌ Неверная цена. Укажите число.\n' +
-            'Пример: Букет роз, 355000, 2, Скидка 25%'
-          )
-          return
-        }
-        
-        const quantity = parseInt(parts[2]) || 1
-        
-        if (quantity <= 0) {
-          await bot.sendMessage(chatId, '❌ Количество должно быть больше 0')
-          return
-        }
-        
-        const comment = parts[3] || null
+        const total = state.price * state.quantity
         const date = new Date()
         
-        const total = price * quantity
+        console.log('📝 Сохраняем покупку:', {
+          clientId: state.clientId,
+          total: total,
+          date: date.toISOString(),
+          comment: state.comment || null
+        })
         
         const orderResult = await db.run(
           'INSERT INTO orders (client_id, total, date, comment) VALUES (?, ?, ?, ?)',
-          state.clientId, total.toString(), date.toISOString(), comment
+          state.clientId, 
+          total.toString(), 
+          date.toISOString(), 
+          state.comment || null
         )
+        
         const orderId = orderResult.lastID
+        console.log(`✅ Заказ создан ID: ${orderId}`)
         
         await db.run(
           'INSERT INTO order_items (order_id, product_name, price, quantity) VALUES (?, ?, ?, ?)',
-          orderId, name, price.toString(), quantity
+          orderId, 
+          state.productName, 
+          state.price.toString(), 
+          state.quantity
         )
         
-        delete userStates[chatId]
+        console.log(`✅ Товар добавлен в заказ ${orderId}`)
         
-        let message = `✅ Покупка добавлена!\n\n`
+        let message = `✅ ПОКУПКА СОХРАНЕНА!\n\n`
         message += `👤 Клиент: ${state.clientName}\n`
-        message += `🛍 ${name}\n`
-        message += `💰 ${price.toLocaleString()} сум x${quantity}\n`
+        message += `🛍 ${state.productName}\n`
+        message += `💰 ${state.price.toLocaleString()} сум x${state.quantity}\n`
         message += `💳 Итого: ${total.toLocaleString()} сум\n`
-        if (comment) {
-          message += `📝 Комментарий: ${comment}\n`
+        if (state.comment) {
+          message += `📝 ${state.comment}\n`
         }
         message += `📅 ${formatDate(date)}`
+        
+        delete userStates[chatId]
         
         await bot.sendMessage(chatId, message, {
           reply_markup: { 
@@ -701,21 +720,39 @@ bot.on('message', async (msg) => {
             resize_keyboard: true 
           }
         })
+        
       } catch (error) {
-        console.error(error)
+        console.error('❌ Ошибка при сохранении:', error)
         await bot.sendMessage(chatId, 
-          '❌ Ошибка при добавлении покупки\n\n' +
-          'Проверьте формат:\n' +
-          'Название, Цена, Количество, Комментарий\n' +
-          'Пример: Букет роз, 355000, 2, Скидка 25%'
+          `❌ Ошибка при сохранении в базу:\n${error.message}\n\n` +
+          `Попробуйте еще раз или нажмите /cancel для отмены`
         )
       }
       return
     }
+    
+    if (text === '❌ ОТМЕНА') {
+      delete userStates[chatId]
+      await bot.sendMessage(chatId, '❌ Отменено', {
+        reply_markup: { 
+          keyboard: [
+            ['👤 Добавить клиента', '🛍 Добавить покупку'],
+            ['📋 История клиента', '🔍 Поиск клиента'],
+            ['📋 Список клиентов', '🗑 Удалить клиента'],
+            ['❓ Помощь']
+          ],
+          resize_keyboard: true 
+        }
+      })
+      return
+    }
+    
+    await bot.sendMessage(chatId, '❌ Нажмите кнопку: "✅ ДА, СОХРАНИТЬ" или "❌ ОТМЕНА"')
+    return
   }
 })
 
-// ============ КОМАНДЫ ДЛЯ КЛИЕНТОВ ============
+// ============ КЛИЕНТЫ ============
 
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id
@@ -732,11 +769,7 @@ bot.onText(/\/start/, async (msg) => {
         resize_keyboard: true
       }
     }
-    await bot.sendMessage(chatId, 
-      '🤖 Добро пожаловать в админ-панель Peony Flowers!\n\n' +
-      'Выберите действие:',
-      keyboard
-    )
+    await bot.sendMessage(chatId, '🤖 Админ-панель', keyboard)
     return
   }
   
@@ -751,9 +784,7 @@ bot.onText(/\/start/, async (msg) => {
     if (!client) {
       userStates[chatId] = { action: 'client_login' }
       await bot.sendMessage(chatId, 
-        '🌸 Добро пожаловать в Peony Flowers!\n\n' +
-        'Введите ваш 7-значный код:\n\n' +
-        'Если у вас нет кода, обратитесь к администратору.'
+        '🌸 Введите ваш 7-значный код:'
       )
       return
     }
@@ -762,45 +793,7 @@ bot.onText(/\/start/, async (msg) => {
     
   } catch (error) {
     console.error(error)
-    await bot.sendMessage(chatId, '❌ Ошибка при входе')
-  }
-})
-
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id
-  const text = msg.text
-  
-  if (isAdmin(chatId)) return
-  
-  const state = userStates[chatId]
-  if (!state || state.action !== 'client_login') return
-  
-  try {
-    if (!db) await initDB()
-    
-    const code = text.trim()
-    if (code.length !== 7) {
-      await bot.sendMessage(chatId, '❌ Код должен состоять из 7 цифр. Попробуйте снова')
-      return
-    }
-    
-    const client = await db.get('SELECT * FROM clients WHERE code = ?', code)
-    if (!client) {
-      await bot.sendMessage(chatId, '❌ Код не найден. Проверьте правильность ввода')
-      return
-    }
-    
-    await db.run(
-      'UPDATE clients SET telegram_id = ? WHERE id = ?',
-      chatId.toString(), client.id
-    )
-    
-    delete userStates[chatId]
-    await showHistory(chatId, client)
-    
-  } catch (error) {
-    console.error(error)
-    await bot.sendMessage(chatId, '❌ Ошибка при входе')
+    await bot.sendMessage(chatId, '❌ Ошибка')
   }
 })
 
@@ -820,22 +813,19 @@ async function showHistory(chatId, client) {
       ORDER BY o.date DESC
     `, client.id)
     
-    let history = `🌸 История покупок ${client.name}\n\n`
+    let history = `🌸 История ${client.name}\n\n`
     
     if (purchases.length === 0) {
-      history += 'У вас пока нет покупок 🌸'
+      history += 'Нет покупок 🌸'
     } else {
-      purchases.forEach((purchase, index) => {
-        history += `📦 Покупка #${index + 1}\n`
-        const items = purchase.items_json ? JSON.parse(purchase.items_json) : []
+      purchases.forEach((p, i) => {
+        history += `📦 #${i + 1}\n`
+        const items = p.items_json ? JSON.parse(p.items_json) : []
         items.forEach(item => {
           history += `  • ${item.name} - ${item.price} сум x${item.quantity || 1}\n`
         })
-        if (purchase.comment) {
-          history += `  📝 Комментарий: ${purchase.comment}\n`
-        }
-        history += `💰 Итого: ${purchase.total} сум\n`
-        history += `📅 ${formatDate(purchase.date)}\n\n`
+        if (p.comment) history += `  📝 ${p.comment}\n`
+        history += `💰 ${p.total} сум\n📅 ${formatDate(p.date)}\n\n`
       })
     }
     
@@ -843,18 +833,17 @@ async function showHistory(chatId, client) {
     
   } catch (error) {
     console.error(error)
-    await bot.sendMessage(chatId, '❌ Ошибка при получении истории')
+    await bot.sendMessage(chatId, '❌ Ошибка')
   }
 }
 
 // ============ ЗАПУСК ============
 
 initDB().then(() => {
-  console.log('🤖 Бот Peony Flowers запущен!')
+  console.log('🤖 Бот запущен!')
   console.log('👤 Админ ID:', adminId)
-  console.log('📱 Напишите /start или /admin для начала работы')
 })
 
 bot.on('error', (error) => {
-  console.error('❌ Ошибка бота:', error)
+  console.error('❌ Ошибка:', error)
 })

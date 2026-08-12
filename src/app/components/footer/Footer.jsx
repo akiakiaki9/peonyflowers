@@ -1,40 +1,64 @@
-import { FaInstagram, FaTelegram, FaWhatsapp, FaPhone, FaMapMarkerAlt, FaClock } from 'react-icons/fa'
+// footer.js
+import { FaHeart } from 'react-icons/fa'
+import { FaInstagram, FaTelegram } from 'react-icons/fa'
 import './footer.css'
 
 export default function Footer() {
-  return (
-    <footer className="footer">
-      <div className="container">
-        <div className="footer-grid">
-          <div className="footer-col">
-            <h3>🌸 Peony Flowers</h3>
-            <p>Свежие цветы с любовью</p>
-          </div>
-          <div className="footer-col">
-            <h4>Контакты</h4>
-            <p><FaPhone /> +998 94 083-77-00</p>
-            <p><FaMapMarkerAlt /> Eski avtovokzal, Globus supermarket bormasdan</p>
-            <p><FaClock /> 24/7</p>
-          </div>
-          <div className="footer-col">
-            <h4>Мы в соцсетях</h4>
-            <div className="footer-social">
-              <a href="https://www.instagram.com/peony_flowers_bukhara/" target="_blank" rel="noopener noreferrer">
-                <FaInstagram />
-              </a>
-              <a href="https://t.me/gullar_sovgalar" target="_blank" rel="noopener noreferrer">
-                <FaTelegram />
-              </a>
-              <a href="https://wa.me/998940837700" target="_blank" rel="noopener noreferrer">
-                <FaWhatsapp />
-              </a>
+    const currentYear = new Date().getFullYear()
+
+    return (
+        <footer className="footer">
+            <div className="container">
+                <div className="footer-content">
+                    <div className="footer-top">
+                        <div className="footer-brand">
+                            <div className="footer-logo">
+                                <img src="/images/logo.png" alt="Peony Flowers" />
+                                <span>Peony Flowers</span>
+                            </div>
+                            <p className="brand-desc">
+                                Создаем неповторимые букеты из свежих цветов с любовью к каждой детали
+                            </p>
+                            <div className="brand-tagline">
+                                <FaHeart /> Цветы, которые говорят без слов
+                            </div>
+                        </div>
+
+                        <div className="footer-links">
+                            <h4>Навигация</h4>
+                            <a href="#catalog">Каталог</a>
+                            <a href="#contacts">Контакты</a>
+                        </div>
+
+                        <div className="footer-social">
+                            <h4>Связь с нами</h4>
+                            <div className="social-icons">
+                                <a href="https://www.instagram.com/peony_flowers_bukhara/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                                    <FaInstagram />
+                                </a>
+                                <a href="https://t.me/gullar_sovgalar" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
+                                    <FaTelegram />
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="footer-bottom">
+                        <div className="copyright">
+                            <span>© {currentYear} Peony Flowers</span>
+                            <span>•</span>
+                            <span>Все права защищены</span>
+                        </div>
+                        <div className="footer-dev">
+                            <span>Разработано с</span>
+                            <FaHeart />
+                            <a href="https://akbarsoft.uz" target="_blank" rel="noopener noreferrer">
+                                Akbar Soft
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <p>&copy; 2024 Peony Flowers. Все права защищены.</p>
-        </div>
-      </div>
-    </footer>
-  )
-}
+        </footer>
+    )
+};

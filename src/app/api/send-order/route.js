@@ -1,3 +1,4 @@
+// api/send-order/route.js (обновленный)
 export async function POST(request) {
   try {
     const orderData = await request.json()
@@ -16,15 +17,20 @@ export async function POST(request) {
     }
 
     // Формируем сообщение
+    let itemsText = orderData.items.map((item, index) => 
+      `${index + 1}. ${item.name} × ${item.quantity} = ${(item.price * item.quantity).toLocaleString()} сум`
+    ).join('\n')
+
     const message = 
 `🆕 НОВЫЙ ЗАКАЗ С САЙТА!
 
 👤 Имя: ${orderData.name}
 📱 Телефон: ${orderData.phone}
-🌸 Товар: ${orderData.product}
-📦 Количество: ${orderData.quantity}
-💰 Цена: ${orderData.price} сум
-💳 Итого: ${orderData.total} сум
+
+🌸 Товары:
+${itemsText}
+
+💰 Итого: ${orderData.total.toLocaleString()} сум
 📅 Время: ${new Date(orderData.date).toLocaleString('ru-RU')}
 
 📌 Свяжитесь с клиентом!`
