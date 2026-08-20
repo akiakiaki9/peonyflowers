@@ -48,14 +48,6 @@ export const catalog = [
         category: ''
     },
     {
-        id: 7,
-        name: 'Peony Flowers букет',
-        price: 0,
-        description: 'Peony Flowers букет',
-        image: '/images/catalog/7.png',
-        category: ''
-    },
-    {
         id: 8,
         name: 'Peony Flowers букет',
         price: 1000000,
@@ -77,6 +69,46 @@ export const catalog = [
         price: 500000,
         description: 'Peony Flowers букет',
         image: '/images/catalog/10.png',
+        category: ''
+    },
+    {
+        id: 11,
+        name: 'Peony Flowers букет',
+        price: 1350000,
+        description: 'Peony Flowers букет',
+        image: '/images/catalog/11.png',
+        category: ''
+    },
+    {
+        id: 12,
+        name: 'Peony Flowers букет',
+        price: 1350000,
+        description: 'Peony Flowers букет',
+        image: '/images/catalog/12.png',
+        category: ''
+    },
+    {
+        id: 13,
+        name: 'Peony Flowers букет',
+        price: 1350000,
+        description: 'Peony Flowers букет',
+        image: '/images/catalog/13.png',
+        category: ''
+    },
+    {
+        id: 14,
+        name: 'Peony Flowers букет',
+        price: 1350000,
+        description: 'Peony Flowers букет',
+        image: '/images/catalog/14.png',
+        category: ''
+    },
+    {
+        id: 15,
+        name: 'Peony Flowers букет',
+        price: 2600000,
+        description: 'Peony Flowers букет',
+        image: '/images/catalog/15.png',
         category: ''
     },
 ]
